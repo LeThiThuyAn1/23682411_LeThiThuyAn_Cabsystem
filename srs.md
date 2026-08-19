@@ -310,4 +310,41 @@ Cung cấp dữ liệu và báo cáo về số lượng chuyến, doanh thu, t�
 
 #B6.  Business Process:
 
+# Business Process – CAB System
 
+## 1. Quy trình đặt chuyến xe – BR-01
+
+```mermaid
+flowchart TD
+    A([Bắt đầu]) --> B[Khách hàng đăng nhập]
+    B --> C[Nhập vị trí hiện tại]
+    C --> D[Nhập điểm đón]
+    D --> E[Nhập điểm đến]
+    E --> F[Chọn loại xe]
+    F --> G[Gửi yêu cầu đặt xe]
+    G --> H[Hệ thống tiếp nhận yêu cầu]
+    H --> I[Thông báo yêu cầu đã được tiếp nhận]
+    I --> J([Chuyển sang tìm tài xế])
+```
+flowchart TD
+    A([Nhận yêu cầu đặt xe]) --> B[Xác định các tài xế phù hợp]
+    B --> C[Kiểm tra vị trí tài xế]
+    C --> D[Kiểm tra trạng thái sẵn sàng]
+    D --> E[Ưu tiên tài xế phù hợp và gần khách hàng]
+    E --> F{Có tài xế phù hợp?}
+
+    F -- Không --> G[Thông báo không tìm được tài xế]
+    G --> H([Kết thúc])
+
+    F -- Có --> I[Gửi yêu cầu chuyến đến tài xế]
+    I --> J{Tài xế phản hồi?}
+
+    J -- Không --> K[Chờ hết thời gian phản hồi]
+    K --> L[Tìm tài xế tiếp theo]
+    L --> I
+
+    J -- Có --> M{Tài xế chấp nhận?}
+    M -- Không --> L
+    M -- Có --> N[Phân công chuyến cho tài xế]
+    N --> O[Thông báo cho khách hàng]
+    O --> P([Bắt đầu chuyến])
