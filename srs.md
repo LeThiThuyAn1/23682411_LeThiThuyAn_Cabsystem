@@ -64,44 +64,30 @@ Hệ thống giúp **giảm thời gian xử lý, nâng cao chất lượng dị
 2.	Vẽ ma trận stalkholder matrick
 ## 3. Stakeholder Matrix
 
-**Ma trận Stakeholder theo mức độ ảnh hưởng (Power) và mức độ quan tâm (Interest):**
+| MỨC ĐỘ ẢNH HƯỞNG | MỨC ĐỘ QUAN TÂM THẤP | MỨC ĐỘ QUAN TÂM CAO |
+|---|---|---|
+| **CAO** | Nhà cung cấp thanh toán<br>Nhà cung cấp thông báo | Ban lãnh đạo<br>Nhân viên vận hành |
+| **THẤP** | BA / Đội phát triển | Khách hàng<br>Tài xế |
 
-### MA TRẬN STAKEHOLDER – POWER / INTEREST
-
-|                         | **MỨC ĐỘ QUAN TÂM THẤP** | **MỨC ĐỘ QUAN TÂM CAO** |
-|-------------------------|---------------------------|---------------------------|
-| **ẢNH HƯỞNG CAO**       | 🟡 **KEEP SATISFIED**     | 🔴 **MANAGE CLOSELY**     |
-|                         | • Nhà cung cấp thanh toán | • Ban lãnh đạo            |
-|                         | • Nhà cung cấp thông báo  | • Nhân viên vận hành      |
-| **ẢNH HƯỞNG THẤP**      | ⚪ **MONITOR**             | 🟢 **KEEP INFORMED**      |
-|                         | • BA / Đội phát triển     | • Khách hàng               |
-|                         |                           | • Tài xế                   |
-
-### Chiến lược quản lý
-- 🔴 **Manage Closely:** Thường xuyên trao đổi và tham gia quyết định.
-- 🟡 **Keep Satisfied:** Đảm bảo nhu cầu và duy trì sự hài lòng.
-- 🟢 **Keep Informed:** Cập nhật thông tin thường xuyên.
-- ⚪ **Monitor:** Theo dõi và cập nhật khi cần.
 ### Sơ đồ Stakeholder Matrix
 
                     MỨC ĐỘ ẢNH HƯỞNG
                             CAO
                              │
-          Keep Satisfied     │      Manage Closely
                              │
-   Nhà cung cấp thanh toán   │   Ban lãnh đạo
-   Nhà cung cấp thông báo    │   Nhân viên vận hành
+       Nhà cung cấp         │        Ban lãnh đạo
+       thanh toán &         │        Nhân viên vận hành
+       thông báo            │
                              │
        ──────────────────────┼──────────────────────
                              │
-          Monitor            │      Keep Informed
+       BA / Đội phát triển   │        Khách hàng
+                             │        Tài xế
                              │
-   BA / Đội phát triển       │   Khách hàng
-                             │   Tài xế
                              │
                             THẤP
                      MỨC ĐỘ QUAN TÂM
-                       THẤP → CAO
+                       THẤP       CAO
 
 # B3. BUSINESS GOALS
 
