@@ -1,0 +1,339 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR08 Payment
+  description: |
+    ### FR08 - Payment (Thanh toán)
+    Covers: UC10 - Payment
+    Related Acceptance Criteria: AC02 - Payment, BG06 - Ensure Successful
+    Payment, BG07 - Handle Failed Payment, BG08 - Support Cash Payment
+
+    Scope of FR08:
+    - Customer selects a payment method (cash or electronic) for a fare
+      already calculated (see FR07)
+    - Cash payments are confirmed directly by the system/staff
+    - Electronic payments are forwarded to an external Payment Provider
+    - Failed electronic payments can be retried per business policy
+    - A payment failure must not interrupt the overall booking service
+      (NBR04 - Reliability)
+    - Sensitive card/account information is never stored directly by
+      this system (BR07)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Payment
+    description: Trip payment processing (UC10)
+
+paths:
+  /trips/{tripId}/payments:
+    post:
+      summary: Initiate payment for a trip
+      description: |
+        Corresponds to UC10 - Payment.
+        Main flow:
+        - If method is CASH: system records the amount to be collected and
+          marks the payment as pending staff/driver confirmation.
+        - If method is ELECTRONIC: system sends a payment request to the
+          external Payment Provider and returns the transaction result.
+        Exception flow: if the electronic payment fails, the system
+        returns the failure and records a FAILED transaction; the booking
+        and trip flow are not affected (NBR04). The customer may retry via
+        the same endpoint according to business policy.
+        Precondition: a Fare must already exist for the trip (see FR07).
+      operationId: initiatePayment
+      tags:
+        - Payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          description: ID of the trip being paid for
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitiatePaymentRequest'
+      responses:
+        '201':
+          description: Payment recorded (result depends on method and provider response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          description: Invalid payment method or missing fare
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Customer is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip or fare not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Trip already has a successful payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Electronic payment failed at the external Payment Provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /payments/{paymentId}/retry:
+    post:
+      summary: Retry a failed electronic payment
+      description: |
+        Related to BG07 - Handle Failed Payment.
+        Main flow: customer chooses to retry after a failed electronic
+        payment; system re-sends the request to the Payment Provider using
+        the same fare amount.
+        Exception flow: retry is rejected if the payment already succeeded,
+        or if the trip's payment is not eligible for retry per business
+        policy (e.g. retry limit reached).
+      operationId: retryPayment
+      tags:
+        - Payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          description: ID of the previously failed payment
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Retry processed (result depends on provider response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: Payment not found
+          content:
+            antml:
+        '409':
+          description: Payment is not eligible for retry (already succeeded, or retry limit reached)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Retry failed at the external Payment Provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /payments/{paymentId}:
+    get:
+      summary: Get payment details and result
+      description: |
+        Allows the customer to check the outcome of a payment (see AC02 -
+        "khách hàng nhận được thông báo khi thanh toán thành công hoặc
+        thất bại").
+      operationId: getPaymentById
+      tags:
+        - Payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          description: ID of the payment
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Payment found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '401':
+          description: User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to view this payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /payments/provider-callback:
+    post:
+      summary: Receive payment result callback from the external Payment Provider
+      description: |
+        Webhook consumed from the external Payment Provider to update the
+        final result of an electronic payment asynchronously, in cases
+        where the provider does not return the result synchronously.
+        Not directly tied to a UC step, but required to fulfil UC10's
+        "Nhận kết quả giao dịch" for asynchronous providers.
+      operationId: handlePaymentProviderCallback
+      tags:
+        - Payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentProviderCallback'
+      responses:
+        '200':
+          description: Callback processed successfully
+        '400':
+          description: Invalid or unverifiable callback payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Referenced payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    InitiatePaymentRequest:
+      type: object
+      properties:
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+      required:
+        - paymentMethod
+
+    PaymentMethod:
+      type: string
+      enum:
+        - CASH
+        - ELECTRONIC
+
+    PaymentStatus:
+      type: string
+      enum:
+        - PENDING
+        - SUCCESS
+        - FAILED
+      description: |
+        PENDING: cash payment awaiting confirmation, or electronic payment
+        awaiting provider result.
+        SUCCESS: payment confirmed/completed.
+        FAILED: electronic payment failed at the provider; eligible for
+        retry per business policy.
+
+    Payment:
+      type: object
+      properties:
+        paymentId:
+          type: integer
+          format: int64
+        tripId:
+          type: integer
+          format: int64
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        amount:
+          type: number
+          format: double
+        paymentTime:
+          type: string
+          format: date-time
+        paymentStatus:
+          $ref: '#/components/schemas/PaymentStatus'
+        transactionCode:
+          type: string
+          description: Reference code returned by the external Payment Provider (ELECTRONIC only)
+
+    PaymentProviderCallback:
+      type: object
+      description: |
+        Payload shape depends on the external Payment Provider's webhook
+        format; this schema represents the minimum fields required by the
+        system.
+      properties:
+        transactionCode:
+          type: string
+        status:
+          type: string
+          enum:
+            - SUCCESS
+            - FAILED
+        providerMessage:
+          type: string
+      required:
+        - transactionCode
+        - status
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
