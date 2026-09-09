@@ -1,0 +1,259 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR06 Location Tracking
+  description: |
+    ### FR06 - Location Tracking (Theo dõi vị trí)
+    Supports: UC05 - Find and Assign Driver (driver location used for
+    matching, see FR03), UC08 - Track Trip (ETA and live position)
+    Related Business Goals: BG01 - Prioritize Nearby Drivers,
+    BG06 - Trip Tracking Transparency
+
+    Scope of FR06:
+    - Driver app periodically pushes the driver's current GPS location
+    - System stores/updates the driver's current location for use by
+      FR03 (Driver Matching)
+    - System exposes the driver's current location and an estimated time
+      of arrival (ETA) for an active trip, consumed by FR05 (Trip Management)
+      and the customer's tracking view (UC08)
+    - Does NOT cover route calculation/turn-by-turn navigation - this
+      relies on an external Map/Location provider integration
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Location
+    description: Driver location updates and ETA (UC05, UC08)
+
+paths:
+  /drivers/{driverId}/location:
+    put:
+      summary: Update the driver's current location
+      description: |
+        Main flow: driver's app periodically sends its current GPS
+        coordinates while the driver is online (available or on a trip);
+        the system stores the latest location to support driver matching
+        (FR03) and trip tracking (FR05, UC08).
+        Exception flow: if updates stop arriving (e.g. connectivity loss),
+        the system keeps the last known location and marks it as stale
+        after a configured timeout (see NBR12 - Recovery Capability); it
+        does not immediately cancel any trip in progress.
+      operationId: updateDriverLocation
+      tags:
+        - Location
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          description: ID of the driver
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationUpdateRequest'
+      responses:
+        '200':
+          description: Location updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverLocation'
+        '400':
+          description: Invalid coordinates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Driver is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Location can only be updated by the driver themselves
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Driver not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /drivers/{driverId}/location:
+    get:
+      summary: Get the driver's current/last known location
+      description: |
+        Read-only lookup used internally by FR03 (Driver Matching) and by
+        FR05 (Trip Management) to populate `lastKnownLocation` on a Trip.
+      operationId: getDriverLocation
+      tags:
+        - Location
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          description: ID of the driver
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Current location returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverLocation'
+        '404':
+          description: Driver not found or has no recorded location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /trips/{tripId}/eta:
+    get:
+      summary: Get the estimated time of arrival for a trip
+      description: |
+        Corresponds to UC08 - Track Trip, step "Hiển thị thời gian dự kiến
+        tài xế đến" (BJ06 - Trip Tracking Transparency).
+        Main flow: system computes ETA from the driver's current location
+        to the relevant point (pickup location before pickup, destination
+        after pickup) using the Map/Location provider.
+        Exception flow: if the driver's location is stale or unavailable,
+        the response indicates ETA is temporarily unavailable rather than
+        returning an inaccurate estimate.
+      operationId: getTripEta
+      tags:
+        - Location
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          description: ID of the trip
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: ETA computed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripEta'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: ETA is temporarily unavailable (stale or missing driver location)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LocationUpdateRequest:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        recordedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the coordinates were captured on the device
+      required:
+        - lat
+        - lng
+
+    DriverLocation:
+      type: object
+      properties:
+        driverId:
+          type: integer
+          format: int64
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        updatedAt:
+          type: string
+          format: date-time
+        isStale:
+          type: boolean
+          description: True if no update has been received within the configured timeout
+
+    TripEta:
+      type: object
+      properties:
+        tripId:
+          type: integer
+          format: int64
+        targetPoint:
+          type: string
+          enum:
+            - PICKUP
+            - DESTINATION
+          description: Which point the ETA is calculated toward, based on current trip status
+        etaMinutes:
+          type: number
+          format: double
+        calculatedAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
