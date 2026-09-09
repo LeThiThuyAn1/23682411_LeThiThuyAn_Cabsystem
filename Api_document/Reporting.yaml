@@ -1,0 +1,223 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR12 Reporting
+  description: |
+    ### FR12 - Reporting (Báo cáo)
+    Covers: UC19 - View Report
+    Related Acceptance Criteria: AC07 - Report displays all required
+    business metrics
+    Actors: Operation Staff, Ban lãnh đạo (Executive Board)
+
+    Scope of FR12:
+    - Aggregates operational data over a selected time range: number of
+      trips, revenue, completion rate, cancellation rate, and driver
+      performance
+    - Read-only reporting endpoint; does not modify any business data
+    - Access is restricted to users who have report-viewing permission
+      (see FR13 - Authorization Management)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Reporting
+    description: Business activity reports (UC19)
+
+paths:
+  /reports/operations:
+    get:
+      summary: Get the operations report for a time range
+      description: |
+        Corresponds to UC19 - View Report.
+        Main flow: user selects a time range; system aggregates the data,
+        computes the number of trips, revenue, completion rate,
+        cancellation rate, and driver performance, then returns the
+        report.
+        Exception flow: if there is not enough data in the selected range,
+        the system returns a report with zeroed/empty metrics rather than
+        an error (see UC19 exception: "Không đủ dữ liệu → thông báo không
+        có dữ liệu báo cáo").
+      operationId: getOperationsReport
+      tags:
+        - Reporting
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: fromDate
+          in: query
+          required: true
+          description: Start of the reporting period
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          description: End of the reporting period
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsReport'
+        '400':
+          description: Invalid date range (e.g. fromDate after toDate)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to view reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /reports/drivers/{driverId}/performance:
+    get:
+      summary: Get performance report for a single driver
+      description: |
+        Supports the "Phân tích hiệu quả tài xế" step of UC19, scoped to
+        one driver, for drill-down use by Operation Staff.
+      operationId: getDriverPerformanceReport
+      tags:
+        - Reporting
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Driver performance report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverPerformance'
+        '400':
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to view this report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Driver not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    OperationsReport:
+      type: object
+      properties:
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+        totalTrips:
+          type: integer
+          format: int64
+        totalRevenue:
+          type: number
+          format: double
+        completionRate:
+          type: number
+          format: double
+          description: Percentage of trips completed successfully
+        cancellationRate:
+          type: number
+          format: double
+          description: Percentage of trips cancelled
+        topDrivers:
+          type: array
+          description: Driver performance summary within the reporting period
+          items:
+            $ref: '#/components/schemas/DriverPerformance'
+
+    DriverPerformance:
+      type: object
+      properties:
+        driverId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+        totalTrips:
+          type: integer
+          format: int64
+        completedTrips:
+          type: integer
+          format: int64
+        cancelledTrips:
+          type: integer
+          format: int64
+        averageRating:
+          type: number
+          format: double
+        totalRevenue:
+          type: number
+          format: double
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
