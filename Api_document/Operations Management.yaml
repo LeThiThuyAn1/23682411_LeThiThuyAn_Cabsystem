@@ -1,0 +1,886 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR11 Operations Management
+  description: |
+    ### FR11 - Operations Management (Quản lý vận hành)
+    Covers: UC14 - Manage Customers, UC15 - Manage Drivers,
+    UC16 - Manage Vehicles, UC17 - Manage Trips, UC18 - Search Transactions
+    Actor: Operation Staff
+    Related Acceptance Criteria: AC05 - Login and Authorization (staff
+    actions are restricted to their granted permissions, see FR13)
+
+    Scope of FR11:
+    - CRUD-style management of customers, drivers, and vehicles by
+      Operation Staff
+    - Monitoring of ongoing/all trips and support for resolving problem
+      trips
+    - Read-only search over payment transactions
+    - Does NOT cover role/permission assignment itself - that is FR13
+      (Authorization Management)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: StaffCustomers
+    description: Customer management by Operation Staff (UC14)
+  - name: StaffDrivers
+    description: Driver management by Operation Staff (UC15)
+  - name: StaffVehicles
+    description: Vehicle management by Operation Staff (UC16)
+  - name: StaffTrips
+    description: Trip monitoring and issue resolution (UC17)
+  - name: StaffTransactions
+    description: Transaction search (UC18)
+
+paths:
+  /staff/customers:
+    get:
+      summary: List customers
+      description: |
+        Corresponds to UC14 - Manage Customers, step "Mở danh sách khách
+        hàng".
+      operationId: listCustomersForStaff
+      tags:
+        - StaffCustomers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Customer'
+        '401':
+          description: Staff is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Staff does not have permission to view customers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/customers/{customerId}:
+    put:
+      summary: Update customer information or status
+      description: |
+        Corresponds to UC14 - Manage Customers, steps "Thêm hoặc cập nhật
+        thông tin" and "Cập nhật trạng thái".
+        Exception flow: staff without permission is rejected (see AC05).
+      operationId: updateCustomerByStaff
+      tags:
+        - StaffCustomers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerByStaffRequest'
+      responses:
+        '200':
+          description: Customer updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Staff does not have permission to update customers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/drivers:
+    get:
+      summary: List drivers
+      description: |
+        Corresponds to UC15 - Manage Drivers, step "Mở danh sách tài xế".
+      operationId: listDriversForStaff
+      tags:
+        - StaffDrivers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of drivers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Driver'
+        '403':
+          description: Staff does not have permission to view drivers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Register a new driver profile
+      description: |
+        Corresponds to UC15 - Manage Drivers, step "Thêm ... thông tin".
+        Exception flow: invalid information requires the staff to
+        re-enter the data.
+      operationId: createDriverByStaff
+      tags:
+        - StaffDrivers
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDriverRequest'
+      responses:
+        '201':
+          description: Driver profile created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '400':
+          description: Invalid driver information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Staff does not have permission to add drivers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/drivers/{driverId}:
+    put:
+      summary: Update driver information or activity status
+      description: |
+        Corresponds to UC15 - Manage Drivers, steps "Cập nhật thông tin"
+        and "Cập nhật trạng thái hoạt động".
+      operationId: updateDriverByStaff
+      tags:
+        - StaffDrivers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDriverByStaffRequest'
+      responses:
+        '200':
+          description: Driver updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '400':
+          description: Invalid driver information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Staff does not have permission to update drivers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Driver not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/vehicles:
+    get:
+      summary: List vehicles
+      description: |
+        Corresponds to UC16 - Manage Vehicles, step "Mở danh sách phương
+        tiện".
+      operationId: listVehiclesForStaff
+      tags:
+        - StaffVehicles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Vehicle'
+        '403':
+          description: Staff does not have permission to view vehicles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Add a new vehicle
+      description: |
+        Corresponds to UC16 - Manage Vehicles, step "Thêm phương tiện".
+        Exception flow: invalid license plate or vehicle information
+        returns an error.
+      operationId: createVehicle
+      tags:
+        - StaffVehicles
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVehicleRequest'
+      responses:
+        '201':
+          description: Vehicle created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+        '400':
+          description: Invalid license plate or vehicle information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Staff does not have permission to add vehicles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/vehicles/{vehicleId}:
+    put:
+      summary: Update vehicle information or status
+      description: |
+        Corresponds to UC16 - Manage Vehicles, steps "Cập nhật thông tin"
+        and "Cập nhật trạng thái".
+      operationId: updateVehicle
+      tags:
+        - StaffVehicles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVehicleRequest'
+      responses:
+        '200':
+          description: Vehicle updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehicle'
+        '400':
+          description: Invalid license plate or vehicle information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Staff does not have permission to update vehicles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Vehicle not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/trips:
+    get:
+      summary: List trips for monitoring
+      description: |
+        Corresponds to UC17 - Manage Trips, step "Xem danh sách chuyến".
+        Supports filtering to show ongoing trips as required by BR06 /
+        BG04 (nhân viên vận hành theo dõi các chuyến đang diễn ra).
+      operationId: listTripsForStaff
+      tags:
+        - StaffTrips
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter trips by status (see TripStatus in FR05)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of trips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trip'
+        '403':
+          description: Staff does not have permission to view trips
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/trips/{tripId}:
+    get:
+      summary: Get trip detail for staff review
+      description: |
+        Corresponds to UC17 - Manage Trips, steps "Xem chi tiết chuyến"
+        and "Kiểm tra trạng thái".
+      operationId: getTripDetailForStaff
+      tags:
+        - StaffTrips
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Trip detail found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '403':
+          description: Staff does not have permission to view this trip
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/trips/{tripId}/resolve:
+    post:
+      summary: Resolve a problem trip
+      description: |
+        Corresponds to UC17 - Manage Trips, step "Hỗ trợ xử lý chuyến bị
+        lỗi", and the exception flow of FR07 (incomplete trip data routed
+        to Operation Staff).
+        Main flow: staff reviews the problem trip and records a
+        resolution action and outcome.
+      operationId: resolveTripIssue
+      tags:
+        - StaffTrips
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveTripRequest'
+      responses:
+        '200':
+          description: Resolution recorded and applied to the trip
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '403':
+          description: Staff does not have permission to resolve trip issues
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/transactions:
+    get:
+      summary: Search payment transactions
+      description: |
+        Corresponds to UC18 - Search Transactions.
+        Main flow: staff enters search criteria; system searches and
+        returns a list of matching transactions.
+        Exception flow: if no transaction matches, the result list is
+        empty (see AC "Không tìm thấy giao dịch").
+      operationId: searchTransactions
+      tags:
+        - StaffTransactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: tripId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: status
+          in: query
+          required: false
+          description: Payment status filter (see PaymentStatus in FR08)
+          schema:
+            type: string
+        - name: fromDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of matching transactions (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+        '403':
+          description: Staff does not have permission to view transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /staff/transactions/{paymentId}:
+    get:
+      summary: Get transaction detail
+      description: |
+        Corresponds to UC18 - Search Transactions, step "Xem chi tiết
+        giao dịch".
+      operationId: getTransactionDetail
+      tags:
+        - StaffTransactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Transaction found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '403':
+          description: Staff does not have permission to view this transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Customer:
+      type: object
+      properties:
+        customerId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+
+    UpdateCustomerByStaffRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+
+    Driver:
+      type: object
+      properties:
+        driverId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        licenseNumber:
+          type: string
+        status:
+          type: string
+          enum:
+            - AVAILABLE
+            - BUSY
+            - OFFLINE
+            - SUSPENDED
+
+    CreateDriverRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        licenseNumber:
+          type: string
+      required:
+        - fullName
+        - phone
+        - licenseNumber
+
+    UpdateDriverByStaffRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        licenseNumber:
+          type: string
+        status:
+          type: string
+          enum:
+            - AVAILABLE
+            - BUSY
+            - OFFLINE
+            - SUSPENDED
+
+    Vehicle:
+      type: object
+      properties:
+        vehicleId:
+          type: integer
+          format: int64
+        driverId:
+          type: integer
+          format: int64
+        vehicleType:
+          type: string
+        licensePlate:
+          type: string
+        brand:
+          type: string
+        model:
+          type: string
+        color:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+
+    CreateVehicleRequest:
+      type: object
+      properties:
+        driverId:
+          type: integer
+          format: int64
+        vehicleType:
+          type: string
+        licensePlate:
+          type: string
+        brand:
+          type: string
+        model:
+          type: string
+        color:
+          type: string
+      required:
+        - driverId
+        - vehicleType
+        - licensePlate
+
+    UpdateVehicleRequest:
+      type: object
+      properties:
+        vehicleType:
+          type: string
+        licensePlate:
+          type: string
+        brand:
+          type: string
+        model:
+          type: string
+        color:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+
+    Trip:
+      type: object
+      description: See FR05 - Trip Management for the full Trip schema.
+      properties:
+        tripId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        driverId:
+          type: integer
+          format: int64
+        status:
+          type: string
+        fare:
+          type: number
+          format: double
+
+    ResolveTripRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          description: Action taken by staff, e.g. REASSIGN_DRIVER, CANCEL, MANUAL_FARE_OVERRIDE
+        note:
+          type: string
+      required:
+        - action
+
+    Payment:
+      type: object
+      description: See FR08 - Payment for the full Payment schema.
+      properties:
+        paymentId:
+          type: integer
+          format: int64
+        tripId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        paymentMethod:
+          type: string
+        amount:
+          type: number
+          format: double
+        paymentStatus:
+          type: string
+        transactionCode:
+          type: string
+        paymentTime:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
