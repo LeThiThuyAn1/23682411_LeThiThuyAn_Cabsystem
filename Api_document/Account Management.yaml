@@ -1,0 +1,356 @@
+openapi: 3.0.0
+info:
+  title: CAB System API
+  description: |
+    API specification for the CAB System (online ride-booking platform).
+    This document is built incrementally, one Functional Requirement (FR) at a time.
+
+    ### FR01 - Account Management
+    Covers: UC01 (Register Account), UC02 (Login), UC03 (Manage Personal Information)
+    Related Acceptance Criteria: AC05 - Login and Authorization
+
+    Scope of FR01:
+    - Customer self-registration
+    - Login shared by Customer, Driver, and Operation Staff (role is resolved server-side)
+    - View and update personal profile information (Customer, Driver)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Auth
+    description: Registration and authentication (UC01, UC02)
+  - name: Profile
+    description: Personal information management (UC03)
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new customer account
+      description: |
+        Corresponds to UC01 - Register Account.
+        Main flow: customer submits full name, email, phone and password;
+        system validates the data and creates the account.
+        Exception flow: if the email or phone number already exists,
+        the system returns an error and asks the user to re-enter the information.
+      operationId: registerCustomer
+      tags:
+        - Auth
+      requestBody:
+        description: Registration information submitted by the customer
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          description: Invalid input, or email/phone already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      summary: Login to the system
+      description: |
+        Corresponds to UC02 - Login.
+        Shared entry point for Customer, Driver, and Operation Staff.
+        Main flow: user submits email/phone and password; system verifies
+        the credentials, determines the user's role, and grants access to
+        the corresponding functions (see AC05).
+        Exception flow: invalid credentials return an authentication error.
+      operationId: login
+      tags:
+        - Auth
+      requestBody:
+        description: Login credentials
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid email/phone or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/profile:
+    get:
+      summary: Get personal profile information
+      description: |
+        Corresponds to UC03 - Manage Personal Information (view step).
+        Available to Customer and Driver roles for their own profile.
+        Requires the caller to be authenticated (see AC05).
+      operationId: getUserProfile
+      tags:
+        - Profile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: ID of the user whose profile is requested
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to view this profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Update personal profile information
+      description: |
+        Corresponds to UC03 - Manage Personal Information (update step).
+        Main flow: user opens their profile, edits the information, and saves;
+        the system validates and updates the data.
+        Exception flow: invalid input requires the user to re-enter the data.
+      operationId: updateUserProfile
+      tags:
+        - Profile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: ID of the user whose profile is being updated
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: Updated profile fields
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to update this profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        password:
+          type: string
+          format: password
+        address:
+          type: string
+      required:
+        - fullName
+        - email
+        - phone
+        - password
+
+    LoginRequest:
+      type: object
+      properties:
+        identifier:
+          type: string
+          description: Email or phone number used to log in
+        password:
+          type: string
+          format: password
+      required:
+        - identifier
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Access token used to authenticate subsequent requests
+        role:
+          type: string
+          enum:
+            - customer
+            - driver
+            - staff
+            - admin
+        userId:
+          type: integer
+          format: int64
+
+    Customer:
+      type: object
+      properties:
+        customerId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+      required:
+        - fullName
+        - email
+        - phone
+
+    UserProfile:
+      type: object
+      description: Generic personal profile, applicable to Customer and Driver.
+      properties:
+        userId:
+          type: integer
+          format: int64
+        role:
+          type: string
+          enum:
+            - customer
+            - driver
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        licenseNumber:
+          type: string
+          description: Driver's license number (Driver role only)
+        status:
+          type: string
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        licenseNumber:
+          type: string
+          description: Driver's license number (Driver role only)
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
