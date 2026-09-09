@@ -1,0 +1,278 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR09 Notification
+  description: |
+    ### FR09 - Notification (Thông báo)
+    Covers: UC11 - Send Notification
+    Related Acceptance Criteria: AC06 - Notification
+    Related Business Goals: BG09 - Ensure Timely Notification
+
+    Scope of FR09:
+    - Triggered internally by other FRs when a relevant business event
+      occurs (booking received, driver assigned, driver arrived, trip
+      completed, payment result, new trip for driver, cancellation, etc.)
+    - Determines the recipient(s), builds the notification content, and
+      sends it through the appropriate channel via an external
+      Notification Provider
+    - Exposes a query endpoint so users can view their notification history
+    - Failed sends are recorded and retried per business policy, without
+      affecting the triggering business process (NBR04 - Reliability)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Notification
+    description: Sending and querying notifications (UC11)
+
+paths:
+  /notifications:
+    post:
+      summary: Create and send a notification
+      description: |
+        Corresponds to UC11 - Send Notification.
+        Main flow: an internal event occurs (e.g. FR02 booking received,
+        FR04 driver assigned, FR05 trip status changed, FR08 payment
+        result); the system determines the recipient, builds the
+        notification content, and sends it through the appropriate
+        channel via the external Notification Provider.
+        Exception flow: if sending fails, the system records the failure
+        and resends according to business policy (see AC06); the
+        triggering process is not blocked or rolled back.
+        Note: this endpoint is primarily called internally by other FRs;
+        it is exposed here for completeness and for manual/staff-triggered
+        notifications.
+      operationId: createNotification
+      tags:
+        - Notification
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNotificationRequest'
+      responses:
+        '201':
+          description: Notification created and dispatch attempted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400':
+          description: Invalid recipient or event type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/notifications:
+    get:
+      summary: List notifications for a user
+      description: |
+        Supports AC06 - Notification by allowing the customer or driver
+        to view the notifications they have received (e.g. booking
+        received, driver assigned, driver arrived, trip completed,
+        payment result, new trip assignment).
+      operationId: listUserNotifications
+      tags:
+        - Notification
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: ID of the user (customer or driver)
+          schema:
+            type: integer
+            format: int64
+        - name: status
+          in: query
+          required: false
+          description: Filter by delivery status
+          schema:
+            $ref: '#/components/schemas/NotificationStatus'
+      responses:
+        '200':
+          description: List of notifications for the user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+        '401':
+          description: User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to view these notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /notifications/{notificationId}/resend:
+    post:
+      summary: Resend a failed notification
+      description: |
+        Related to the exception flow of UC11 ("Gửi thất bại → ghi nhận
+        lỗi và thực hiện gửi lại theo chính sách").
+        Main flow: system re-attempts delivery of a previously failed
+        notification through the Notification Provider.
+      operationId: resendNotification
+      tags:
+        - Notification
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          description: ID of the notification to resend
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Resend attempted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Notification was already sent successfully, or exceeded the retry policy limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    NotificationEventType:
+      type: string
+      enum:
+        - BOOKING_RECEIVED
+        - DRIVER_ASSIGNED
+        - DRIVER_ARRIVED
+        - TRIP_COMPLETED
+        - PAYMENT_RESULT
+        - NEW_TRIP_FOR_DRIVER
+        - TRIP_CANCELLED
+      description: |
+        Maps to the event types listed in the notification business
+        process (BR08): booking (FR02), driver assigned (FR04), driver
+        arrived / trip completed (FR05), payment result (FR08), new trip
+        request for driver (FR04), trip cancellation (FR05).
+
+    NotificationChannel:
+      type: string
+      enum:
+        - PUSH
+        - SMS
+        - EMAIL
+      description: |
+        Extensible list of channels; NBR10 requires the system to support
+        adding new channels without rebuilding the whole system.
+
+    NotificationStatus:
+      type: string
+      enum:
+        - PENDING
+        - SENT
+        - FAILED
+
+    CreateNotificationRequest:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: Recipient user ID
+        eventType:
+          $ref: '#/components/schemas/NotificationEventType'
+        title:
+          type: string
+        content:
+          type: string
+        channel:
+          $ref: '#/components/schemas/NotificationChannel'
+      required:
+        - userId
+        - eventType
+        - title
+        - content
+        - channel
+
+    Notification:
+      type: object
+      properties:
+        notificationId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        eventType:
+          $ref: '#/components/schemas/NotificationEventType'
+        title:
+          type: string
+        content:
+          type: string
+        channel:
+          $ref: '#/components/schemas/NotificationChannel'
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        sentAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
