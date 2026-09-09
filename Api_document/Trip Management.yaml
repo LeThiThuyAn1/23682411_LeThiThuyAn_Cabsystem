@@ -1,0 +1,318 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR05 Trip Management
+  description: |
+    ### FR05 - Trip Management (Quản lý chuyến đi)
+    Covers: UC07 - Update Trip Status (Driver), UC08 - Track Trip (Customer)
+    Related Acceptance Criteria: AC03 - Trip Tracking, AC04 - Cancel Trip
+    Related Business Goals: BG05 - Trip Status Tracking, BG10 - Handle Cancellation
+
+    Scope of FR05:
+    - Driver updates trip status through its lifecycle
+    - Customer views trip status and assigned driver/vehicle information
+    - Handle trip cancellation (customer-initiated, per business policy)
+    - Does NOT cover real-time GPS coordinate streaming - that is FR06
+      (Location Tracking); this spec only exposes the current status and
+      the last known location snapshot
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Trip
+    description: Trip lifecycle status and tracking (UC07, UC08)
+
+paths:
+  /trips/{tripId}:
+    get:
+      summary: Get trip details and current status
+      description: |
+        Corresponds to UC08 - Track Trip.
+        Main flow: customer opens the trip, system shows driver info,
+        current status, and last known driver location; information is
+        refreshed as the trip progresses.
+        Exception flow: if location data is temporarily unavailable, the
+        response omits `lastKnownLocation` rather than failing.
+      operationId: getTripById
+      tags:
+        - Trip
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          description: ID of the trip
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Trip found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '401':
+          description: User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to view this trip
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /trips/{tripId}/status:
+    put:
+      summary: Driver updates the trip status
+      description: |
+        Corresponds to UC07 - Update Trip Status.
+        Main flow: driver progresses the trip through DRIVER_ARRIVING ->
+        ARRIVED_PICKUP -> PICKED_UP -> IN_PROGRESS -> COMPLETED; each
+        update is reflected to the customer via tracking (UC08) and
+        triggers a notification (FR09).
+        Exception flow: if the driver's device loses network connection
+        temporarily, the app resubmits the last known status once
+        connectivity is restored; this endpoint is idempotent for the
+        same `newStatus` value.
+      operationId: updateTripStatus
+      tags:
+        - Trip
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          description: ID of the trip
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTripStatusRequest'
+      responses:
+        '200':
+          description: Trip status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '400':
+          description: Invalid status transition (e.g. skipping a required step)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Driver is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: This trip is not assigned to the authenticated driver
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /trips/{tripId}/cancel:
+    post:
+      summary: Cancel a trip
+      description: |
+        Related to AC04 - Cancel Trip and BR05 (handling cancelled or
+        problematic trips).
+        Main flow: customer requests cancellation while allowed by business
+        policy; system sets the trip status to CANCELLED, notifies the
+        driver, calculates a cancellation fee if applicable, and stores the
+        cancellation record.
+        Exception flow: cancellation is rejected if the trip is outside the
+        allowed status/time window (e.g. already COMPLETED).
+      operationId: cancelTrip
+      tags:
+        - Trip
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          description: ID of the trip to cancel
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelTripRequest'
+      responses:
+        '200':
+          description: Trip cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '401':
+          description: User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to cancel this trip
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Trip cannot be cancelled in its current status or time window
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Trip:
+      type: object
+      properties:
+        tripId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        driverId:
+          type: integer
+          format: int64
+        vehicleId:
+          type: integer
+          format: int64
+        pickupLocation:
+          type: string
+        destination:
+          type: string
+        distance:
+          type: number
+          format: double
+          description: Trip distance in kilometers
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/TripStatus'
+        fare:
+          type: number
+          format: double
+          description: Populated once fare calculation (FR07) completes
+        lastKnownLocation:
+          $ref: '#/components/schemas/GeoPoint'
+
+    TripStatus:
+      type: string
+      enum:
+        - ASSIGNED
+        - DRIVER_ARRIVING
+        - ARRIVED_PICKUP
+        - PICKED_UP
+        - IN_PROGRESS
+        - COMPLETED
+        - CANCELLED
+      description: |
+        ASSIGNED: driver has been assigned (set by FR04).
+        DRIVER_ARRIVING: driver is en route to pickup location.
+        ARRIVED_PICKUP: driver has arrived at the pickup location.
+        PICKED_UP: driver has picked up the customer.
+        IN_PROGRESS: trip is underway toward the destination.
+        COMPLETED: trip has finished (hands off to FR07 - Fare Calculation).
+        CANCELLED: trip was cancelled before completion.
+
+    UpdateTripStatusRequest:
+      type: object
+      properties:
+        newStatus:
+          $ref: '#/components/schemas/TripStatus'
+      required:
+        - newStatus
+
+    CancelTripRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Optional reason provided by the customer for cancellation
+
+    GeoPoint:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
