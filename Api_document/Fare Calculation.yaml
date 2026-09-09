@@ -1,186 +1,111 @@
 openapi: 3.0.0
-info:
-  title: CAB System API - FR07 Fare Calculation
-  description: |
-    ### FR07 - Fare Calculation (Tính cước)
-    Covers: UC09 - Calculate Fare
-    Related Acceptance Criteria: AC02 - Payment (fare amount is the
-    precondition for payment, see FR08)
 
-    Scope of FR07:
-    - Triggered when a trip reaches COMPLETED status (see FR05)
-    - Determines service type and trip data (distance, duration)
-    - Applies fare rules and computes the total amount
-    - Stores the fare and makes it available to the customer and to
-      FR08 (Payment)
-    - Does NOT cover collecting payment - that is FR08
+info:
+  title: Fare Calculation
+  description: |
+    API for calculating the fare that the customer
+    has to pay based on trip information.
   version: 1.0.0
 
 servers:
   - url: http://localhost:8080/api/v1
     description: Local server
 
-tags:
-  - name: Fare
-    description: Fare calculation for completed trips (UC09)
-
 paths:
-  /trips/{tripId}/fare:
+
+  /fares:
     post:
-      summary: Calculate the fare for a completed trip
-      description: |
-        Corresponds to UC09 - Calculate Fare.
-        Main flow: system retrieves the trip data, determines the service
-        type, applies the fare rules (base fare, distance/time rate,
-        surcharges), computes the total amount, and stores the result;
-        the amount is then shown to the customer to proceed to payment
-        (FR08).
-        Exception flow: if trip data is incomplete (e.g. missing distance
-        or duration), the request fails and the case is routed to
-        Operation Staff for manual handling (see UC17 - Trip Management).
-        Precondition: the trip's status must be COMPLETED.
+      summary: Calculate trip fare
       operationId: calculateFare
       tags:
-        - Fare
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: tripId
-          in: path
-          required: true
-          description: ID of the completed trip
-          schema:
-            type: integer
-            format: int64
+        - Fare Calculation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FareCalculationRequest'
       responses:
-        '201':
-          description: Fare calculated and stored successfully
+        '200':
+          description: Trip fare calculated successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Fare'
+        '400':
+          description: Invalid trip information
         '404':
           description: Trip not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Trip is not in COMPLETED status, or fare has already been calculated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: Trip data is incomplete; cannot compute fare and must be routed to Operation Staff
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         '500':
           description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
-  /trips/{tripId}/fare:
+  /fares/{tripId}:
     get:
-      summary: Get the calculated fare for a trip
-      description: |
-        Allows the customer to view the amount owed (last step of UC09,
-        "Hiển thị thông tin cho khách hàng") before proceeding to payment
-        (FR08).
-      operationId: getFareByTripId
+      summary: Get trip fare
+      operationId: getTripFare
       tags:
-        - Fare
-      security:
-        - bearerAuth: []
+        - Fare Calculation
       parameters:
         - name: tripId
           in: path
           required: true
-          description: ID of the trip
           schema:
             type: integer
             format: int64
       responses:
         '200':
-          description: Fare found
+          description: Trip fare information
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Fare'
-        '401':
-          description: User is not authenticated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: User does not have permission to view this fare
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         '404':
-          description: Fare not found for this trip (not yet calculated)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          description: Fare not found
         '500':
           description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
 
   schemas:
-    Fare:
+
+    FareCalculationRequest:
       type: object
       properties:
-        fareId:
-          type: integer
-          format: int64
         tripId:
           type: integer
           format: int64
-        serviceType:
-          type: string
-          description: Vehicle/service type used to determine the fare rule applied
         distance:
           type: number
           format: double
-          description: Trip distance in kilometers, used as fare calculation input
-        baseFare:
-          type: number
-          format: double
-        distanceFare:
-          type: number
-          format: double
-        surcharge:
-          type: number
-          format: double
-          description: Additional charges, if any (e.g. peak hour)
-        totalAmount:
-          type: number
-          format: double
-        calculatedAt:
+          description: Trip distance
+        vehicleType:
           type: string
-          format: date-time
+          enum:
+            - car
+            - motorcycle
+      required:
+        - tripId
+        - distance
+        - vehicleType
 
-    Error:
+    Fare:
       type: object
       properties:
-        error_code:
+        tripId:
+          type: integer
+          format: int64
+        distance:
+          type: number
+          format: double
+        vehicleType:
           type: string
-        message:
+          enum:
+            - car
+            - motorcycle
+        amount:
+          type: number
+          format: double
+          description: Total fare amount
+        currency:
           type: string
+          example: VND
