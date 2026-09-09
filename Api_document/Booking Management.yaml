@@ -1,0 +1,187 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR02 Booking Management
+  description: |
+    ### FR02 - Booking (Đặt xe)
+    Covers: UC04 - Create Booking Request
+    Related Acceptance Criteria: AC01 - Find and Assign Driver (booking creation triggers this process)
+
+    Scope of FR02:
+    - Customer submits pickup location, destination, and vehicle type
+    - System validates and creates the booking request
+    - System immediately hands off the request to the driver-matching process (FR03)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Booking
+    description: Ride booking requests (UC04)
+
+paths:
+  /bookings:
+    post:
+      summary: Create a new booking request
+      description: |
+        Corresponds to UC04 - Create Booking Request.
+        Main flow: customer enters pickup location, destination, and vehicle type,
+        then confirms the booking; the system creates the request and starts
+        looking for a driver (handed off to FR03 - Find Driver).
+        Exception flow: missing or invalid information requires the customer
+        to re-enter the data.
+        Postcondition: a booking request is created with status "SEARCHING".
+      operationId: createBooking
+      tags:
+        - Booking
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: Booking information submitted by the customer
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          description: Booking request created successfully, driver search started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: Missing or invalid pickup location, destination, or vehicle type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Customer is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /bookings/{bookingId}:
+    get:
+      summary: Get booking request details
+      description: |
+        Retrieves a booking request so the customer can confirm it was
+        received (see business process step "Thông báo yêu cầu đã được
+        tiếp nhận") and check its current status.
+      operationId: getBookingById
+      tags:
+        - Booking
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          description: ID of the booking request
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Booking found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '401':
+          description: Customer is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Customer does not have permission to view this booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateBookingRequest:
+      type: object
+      properties:
+        pickupLocation:
+          type: string
+          description: Pickup address or coordinates
+        destination:
+          type: string
+          description: Destination address or coordinates
+        vehicleType:
+          type: string
+          description: Requested vehicle type/category
+      required:
+        - pickupLocation
+        - destination
+        - vehicleType
+
+    Booking:
+      type: object
+      properties:
+        bookingId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        pickupLocation:
+          type: string
+        destination:
+          type: string
+        vehicleType:
+          type: string
+        bookingTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - SEARCHING
+            - ASSIGNED
+            - NO_DRIVER_FOUND
+            - CANCELLED
+          description: |
+            SEARCHING: request received, looking for a driver (FR03).
+            ASSIGNED: a driver has been assigned (handled by FR04).
+            NO_DRIVER_FOUND: no suitable driver was found.
+            CANCELLED: request was cancelled.
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
