@@ -1,0 +1,260 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR04 Driver Assignment
+  description: |
+    ### FR04 - Driver Assignment (Phân công tài xế)
+    Covers: UC05 - Find and Assign Driver (steps 4-6: send request to driver,
+    driver accepts, system assigns driver), UC06 - Accept/Reject Trip Request
+    Related Acceptance Criteria: AC01 - Find and Assign Driver, BG03 - Handle
+    Driver Rejection or No Response
+
+    Scope of FR04:
+    - System sends a trip request to a candidate driver (from FR03 ranking)
+    - Driver accepts or rejects the request
+    - If the driver does not respond within the allowed time, the request
+      expires and the system moves to the next candidate (no request is
+      resent to a driver who already rejected the same booking)
+    - On acceptance, the booking is assigned to the driver and vehicle
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: DriverAssignment
+    description: Sending trip requests to drivers and handling their response (UC05, UC06)
+
+paths:
+  /bookings/{bookingId}/driver-requests:
+    post:
+      summary: Send a trip request to the next candidate driver
+      description: |
+        Corresponds to UC05 - Find and Assign Driver, step 4 (send request
+        to driver).
+        Main flow: system selects the highest-priority candidate driver
+        (from FR03) who has not yet rejected this booking, and sends the
+        trip request with a response deadline.
+        Exception flow: if there is no remaining candidate driver, the
+        response returns 409 and the caller should mark the booking as
+        NO_DRIVER_FOUND (see AC01).
+      operationId: sendDriverRequest
+      tags:
+        - DriverAssignment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          description: ID of the booking request
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '201':
+          description: Trip request sent to a candidate driver
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverRequest'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: No remaining candidate driver for this booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /driver-requests/{requestId}/respond:
+    put:
+      summary: Driver accepts or rejects a trip request
+      description: |
+        Corresponds to UC06 - Accept/Reject Trip Request.
+        Main flow: driver receives the notification, reviews the trip
+        information, and chooses to accept or reject; the system records
+        the result.
+        - If accepted: the booking is assigned to this driver (status
+          becomes ASSIGNED) and the customer is notified (FR09).
+        - If rejected: the system sends a new request to the next candidate
+          driver via POST /bookings/{bookingId}/driver-requests.
+        Exception flow: if the driver does not respond before expiresAt,
+        the request is automatically marked EXPIRED by the system and this
+        endpoint will reject further responses to it (see AC01, BG03).
+      operationId: respondToDriverRequest
+      tags:
+        - DriverAssignment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: ID of the driver trip request
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverResponseRequest'
+      responses:
+        '200':
+          description: Response recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverRequest'
+        '400':
+          description: Invalid response value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Driver is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: This request does not belong to the authenticated driver
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Driver request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Request has already expired or already been answered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /drivers/{driverId}/driver-requests/pending:
+    get:
+      summary: Get the driver's current pending trip request
+      description: |
+        Supports UC06 - Accept/Reject Trip Request, step 1-2 (driver
+        receives notification and views trip information) by allowing the
+        driver's app to fetch the active request details.
+      operationId: getPendingDriverRequest
+      tags:
+        - DriverAssignment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          description: ID of the driver
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Current pending request, if any
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverRequest'
+        '204':
+          description: No pending request for this driver
+        '401':
+          description: Driver is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DriverRequest:
+      type: object
+      description: A trip request sent from the system to one candidate driver.
+      properties:
+        requestId:
+          type: integer
+          format: int64
+        bookingId:
+          type: integer
+          format: int64
+        driverId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+            - PENDING
+            - ACCEPTED
+            - REJECTED
+            - EXPIRED
+          description: |
+            PENDING: waiting for driver response.
+            ACCEPTED: driver accepted, booking is now ASSIGNED to this driver.
+            REJECTED: driver rejected, system will request the next candidate.
+            EXPIRED: driver did not respond before expiresAt.
+        sentAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        respondedAt:
+          type: string
+          format: date-time
+
+    DriverResponseRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+            - ACCEPT
+            - REJECT
+      required:
+        - decision
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
