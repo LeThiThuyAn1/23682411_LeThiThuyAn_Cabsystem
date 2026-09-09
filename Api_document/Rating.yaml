@@ -1,0 +1,249 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR10 Rating
+  description: |
+    ### FR10 - Rating (Đánh giá tài xế)
+    Covers: UC12 - Rate Driver
+    Related Acceptance Criteria: AC06 - "Chỉ cho phép đánh giá sau khi
+    chuyến hoàn thành và lưu kết quả đánh giá"
+    Related Business Goals: BG13 - Improve Service Quality Through Feedback
+
+    Scope of FR10:
+    - Customer rates the driver after a trip is COMPLETED
+    - Rating can only be submitted once per trip
+    - Rating data feeds into driver quality tracking (consumed by FR11/FR12)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Rating
+    description: Post-trip driver rating (UC12)
+
+paths:
+  /trips/{tripId}/rating:
+    post:
+      summary: Submit a rating for the driver of a completed trip
+      description: |
+        Corresponds to UC12 - Rate Driver.
+        Main flow: customer opens a completed trip, selects a rating
+        score, optionally enters a comment, and submits; the system
+        stores the rating and updates the driver's aggregated quality
+        data.
+        Exception flow: invalid rating data (e.g. score out of range)
+        requires the customer to re-enter it.
+        Precondition: the trip's status must be COMPLETED (ratings for
+        trips that are not yet completed are rejected, per AC06).
+      operationId: submitRating
+      tags:
+        - Rating
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          description: ID of the completed trip being rated
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitRatingRequest'
+      responses:
+        '201':
+          description: Rating submitted and saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+        '400':
+          description: Invalid rating score or comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Customer is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: This trip does not belong to the authenticated customer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Trip is not COMPLETED yet, or has already been rated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: Get the rating submitted for a trip
+      description: |
+        Allows the customer to view the rating they already submitted for
+        a trip, or allows staff/reporting to look up a specific trip's
+        rating.
+      operationId: getTripRating
+      tags:
+        - Rating
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          description: ID of the trip
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Rating found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+        '401':
+          description: User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User does not have permission to view this rating
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip has not been rated yet, or trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /drivers/{driverId}/ratings:
+    get:
+      summary: List ratings received by a driver
+      description: |
+        Related to BG13 - Improve Service Quality Through Feedback.
+        Used to review a driver's rating history, e.g. by the driver
+        themselves or by Operation Staff (see FR11 - Operations
+        Management, FR12 - Reporting).
+      operationId: listDriverRatings
+      tags:
+        - Rating
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          description: ID of the driver
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of ratings received by the driver
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Rating'
+        '404':
+          description: Driver not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SubmitRatingRequest:
+      type: object
+      properties:
+        ratingScore:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+      required:
+        - ratingScore
+
+    Rating:
+      type: object
+      properties:
+        ratingId:
+          type: integer
+          format: int64
+        tripId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        driverId:
+          type: integer
+          format: int64
+        ratingScore:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
