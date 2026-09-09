@@ -1,0 +1,251 @@
+openapi: 3.0.0
+info:
+  title: CAB System API - FR13 Authorization Management
+  description: |
+    ### FR13 - Authorization Management (Phân quyền)
+    Covers: UC20 - Manage Permissions
+    Related Acceptance Criteria: AC05 - Login and Authorization
+    Related Business Goals: BG12 - Enhance Control and Information Security
+    Actor: Nhân viên quản trị (Administrator)
+
+    Scope of FR13:
+    - Administrator assigns or changes the role/permissions of a user
+      account (Operation Staff, Admin)
+    - Access control checks used by other FRs (e.g. FR11 - Operations
+      Management, FR12 - Reporting) rely on the permissions set here
+    - Important administrative actions are logged for audit purposes
+      (NBR07 - Traceability), consumed together with FR14 (History Lookup)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+
+tags:
+  - name: Authorization
+    description: Role and permission management (UC20)
+
+paths:
+  /admin/accounts/{accountId}/permissions:
+    get:
+      summary: Get the current role and permissions of an account
+      description: |
+        Corresponds to UC20 - Manage Permissions, step "Chọn tài khoản"
+        and "Xác định vai trò", read-only lookup before making a change.
+      operationId: getAccountPermissions
+      tags:
+        - Authorization
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: ID of the Operation Staff or Admin account
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Current role and permissions returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPermissions'
+        '401':
+          description: Administrator is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Caller does not have administrator permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Grant or change the role/permissions of an account
+      description: |
+        Corresponds to UC20 - Manage Permissions.
+        Main flow: administrator selects the account, determines the
+        target role, grants or changes the permissions, and saves; the
+        system updates the account's access rights and records the
+        action (see NBR07 - Traceability).
+        Exception flow: if the caller does not have administrator rights,
+        the operation is rejected (see AC05).
+      operationId: updateAccountPermissions
+      tags:
+        - Authorization
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: ID of the Operation Staff or Admin account
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountPermissionsRequest'
+      responses:
+        '200':
+          description: Permissions updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPermissions'
+        '400':
+          description: Invalid role or permission value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Administrator is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Caller does not have administrator permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/accounts:
+    get:
+      summary: List staff and admin accounts with their roles
+      description: |
+        Supports UC20 - Manage Permissions, step "Chọn tài khoản", by
+        letting the administrator browse the list of manageable accounts
+        before selecting one.
+      operationId: listStaffAccounts
+      tags:
+        - Authorization
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of staff/admin accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountPermissions'
+        '403':
+          description: Caller does not have administrator permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Role:
+      type: string
+      enum:
+        - STAFF
+        - ADMIN
+      description: |
+        Roles managed by this FR. Customer and Driver roles are assigned
+        at registration (FR01) and are not modified here.
+
+    Permission:
+      type: string
+      enum:
+        - MANAGE_CUSTOMERS
+        - MANAGE_DRIVERS
+        - MANAGE_VEHICLES
+        - MANAGE_TRIPS
+        - VIEW_TRANSACTIONS
+        - VIEW_REPORTS
+        - MANAGE_PERMISSIONS
+      description: |
+        Individual permissions correspond to the operations exposed in
+        FR11 (Operations Management) and FR12 (Reporting).
+
+    AccountPermissions:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+
+    UpdateAccountPermissionsRequest:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+      required:
+        - role
+        - permissions
+
+    Error:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
