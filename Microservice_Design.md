@@ -35,6 +35,48 @@
 
 ### 1.3. Mô hình thực thể
 
+## 1.3. Mô hình thực thể
+
+```mermaid
+erDiagram
+
+    ROLES ||--o{ ACCOUNTS : "has"
+    ROLES ||--o{ PERMISSIONS : "has"
+    ACCOUNTS ||--o{ AUDIT_LOGS : "creates"
+
+    ROLES {
+        UUID role_id PK
+        VARCHAR role_name UK
+    }
+
+    ACCOUNTS {
+        UUID account_id PK
+        VARCHAR email UK
+        VARCHAR phone UK
+        VARCHAR password_hash
+        UUID role_id FK
+        VARCHAR status
+        TIMESTAMP created_at
+    }
+
+    PERMISSIONS {
+        UUID permission_id PK
+        UUID role_id FK
+        VARCHAR action_code
+    }
+
+    AUDIT_LOGS {
+        UUID log_id PK
+        UUID account_id FK
+        VARCHAR action
+        TEXT description
+        VARCHAR ip_address
+        TIMESTAMP created_at
+    }
+```
+
+### SQL tạo bảng
+
 ```sql
 CREATE TABLE roles (
     role_id UUID PRIMARY KEY,
