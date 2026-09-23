@@ -35,78 +35,38 @@
 
 ### 1.3. Mô hình thực thể
 
-## 1.3. Mô hình thực thể
-
 ```mermaid
 erDiagram
+    ACCOUNT ||--|| ROLE : "has"
+    ROLE ||--o{ PERMISSION : "grants"
+    ACCOUNT ||--o{ AUDIT_LOG : "generates"
 
-    ROLES ||--o{ ACCOUNTS : "has"
-    ROLES ||--o{ PERMISSIONS : "has"
-    ACCOUNTS ||--o{ AUDIT_LOGS : "creates"
-
-    ROLES {
-        UUID role_id PK
-        VARCHAR role_name UK
+    ACCOUNT {
+        uuid account_id PK
+        string email
+        string phone
+        string password_hash
+        string role_id FK
+        string status
+        datetime created_at
     }
-
-    ACCOUNTS {
-        UUID account_id PK
-        VARCHAR email UK
-        VARCHAR phone UK
-        VARCHAR password_hash
-        UUID role_id FK
-        VARCHAR status
-        TIMESTAMP created_at
+    ROLE {
+        uuid role_id PK
+        string role_name
     }
-
-    PERMISSIONS {
-        UUID permission_id PK
-        UUID role_id FK
-        VARCHAR action_code
+    PERMISSION {
+        uuid permission_id PK
+        uuid role_id FK
+        string action_code
     }
-
-    AUDIT_LOGS {
-        UUID log_id PK
-        UUID account_id FK
-        VARCHAR action
-        TEXT description
-        VARCHAR ip_address
-        TIMESTAMP created_at
+    AUDIT_LOG {
+        uuid log_id PK
+        uuid account_id FK
+        string action
+        string description
+        string ip_address
+        datetime created_at
     }
-```
-
-### SQL tạo bảng
-
-```sql
-CREATE TABLE roles (
-    role_id UUID PRIMARY KEY,
-    role_name VARCHAR(30) UNIQUE NOT NULL
-);
-
-CREATE TABLE accounts (
-    account_id UUID PRIMARY KEY,
-    email VARCHAR(150) UNIQUE,
-    phone VARCHAR(20) UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    role_id UUID REFERENCES roles(role_id),
-    status VARCHAR(20) DEFAULT 'ACTIVE',
-    created_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE permissions (
-    permission_id UUID PRIMARY KEY,
-    role_id UUID REFERENCES roles(role_id),
-    action_code VARCHAR(50) NOT NULL
-);
-
-CREATE TABLE audit_logs (
-    log_id UUID PRIMARY KEY,
-    account_id UUID REFERENCES accounts(account_id),
-    action VARCHAR(100),
-    description TEXT,
-    ip_address VARCHAR(45),
-    created_at TIMESTAMP DEFAULT now()
-);
 ```
 
 ### 1.4. API (REST)
