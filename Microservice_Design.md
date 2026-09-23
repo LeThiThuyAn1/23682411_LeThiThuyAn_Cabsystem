@@ -36,68 +36,34 @@
 ### 1.3. Mô hình thực thể
 
 ```mermaid
--- ============================================
--- DATABASE: identity_db
--- Microservice: identity-service
--- Bounded Context: Identity & Access
--- Database Type: PostgreSQL
--- ============================================
-
--- ============================================
--- TABLE: roles
--- ============================================
 CREATE TABLE roles (
     role_id UUID PRIMARY KEY,
     role_name VARCHAR(30) UNIQUE NOT NULL
 );
 
--- ============================================
--- TABLE: accounts
--- ============================================
 CREATE TABLE accounts (
     account_id UUID PRIMARY KEY,
     email VARCHAR(150) UNIQUE,
     phone VARCHAR(20) UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role_id UUID,
+    role_id UUID REFERENCES roles(role_id),
     status VARCHAR(20) DEFAULT 'ACTIVE',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_accounts_role
-        FOREIGN KEY (role_id)
-        REFERENCES roles(role_id)
+    created_at TIMESTAMP DEFAULT now()
 );
 
--- ============================================
--- TABLE: permissions
--- ============================================
 CREATE TABLE permissions (
     permission_id UUID PRIMARY KEY,
-    role_id UUID NOT NULL,
-    permission_code VARCHAR(50) NOT NULL,
-
-    CONSTRAINT fk_permissions_role
-        FOREIGN KEY (role_id)
-        REFERENCES roles(role_id),
-
-    CONSTRAINT uq_role_permission
-        UNIQUE (role_id, permission_code)
+    role_id UUID REFERENCES roles(role_id),
+    action_code VARCHAR(50) NOT NULL
 );
 
--- ============================================
--- TABLE: audit_logs
--- ============================================
 CREATE TABLE audit_logs (
     log_id UUID PRIMARY KEY,
-    account_id UUID,
+    account_id UUID REFERENCES accounts(account_id),
     action VARCHAR(100),
     description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     ip_address VARCHAR(45),
-
-    CONSTRAINT fk_audit_logs_account
-        FOREIGN KEY (account_id)
-        REFERENCES accounts(account_id)
+    created_at TIMESTAMP DEFAULT now()
 );
 ```
 
