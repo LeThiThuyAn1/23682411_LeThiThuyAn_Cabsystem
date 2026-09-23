@@ -36,37 +36,69 @@
 ### 1.3. Mô hình thực thể
 
 ```mermaid
-erDiagram
-    ACCOUNT ||--|| ROLE : "has"
-    ROLE ||--o{ PERMISSION : "grants"
-    ACCOUNT ||--o{ AUDIT_LOG : "generates"
+-- ============================================
+-- DATABASE: identity_db
+-- Microservice: identity-service
+-- Bounded Context: Identity & Access
+-- Database Type: PostgreSQL
+-- ============================================
 
-    ACCOUNT {
-        uuid account_id PK
-        string email
-        string phone
-        string password_hash
-        string role_id FK
-        string status
-        datetime created_at
-    }
-    ROLE {
-        uuid role_id PK
-        string role_name
-    }
-    PERMISSION {
-        uuid permission_id PK
-        uuid role_id FK
-        string action_code
-    }
-    AUDIT_LOG {
-        uuid log_id PK
-        uuid account_id FK
-        string action
-        string description
-        string ip_address
-        datetime created_at
-    }
+-- ============================================
+-- TABLE: roles
+-- ============================================
+CREATE TABLE roles (
+    role_id UUID PRIMARY KEY,
+    role_name VARCHAR(30) UNIQUE NOT NULL
+);
+
+-- ============================================
+-- TABLE: accounts
+-- ============================================
+CREATE TABLE accounts (
+    account_id UUID PRIMARY KEY,
+    email VARCHAR(150) UNIQUE,
+    phone VARCHAR(20) UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role_id UUID,
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_accounts_role
+        FOREIGN KEY (role_id)
+        REFERENCES roles(role_id)
+);
+
+-- ============================================
+-- TABLE: permissions
+-- ============================================
+CREATE TABLE permissions (
+    permission_id UUID PRIMARY KEY,
+    role_id UUID NOT NULL,
+    permission_code VARCHAR(50) NOT NULL,
+
+    CONSTRAINT fk_permissions_role
+        FOREIGN KEY (role_id)
+        REFERENCES roles(role_id),
+
+    CONSTRAINT uq_role_permission
+        UNIQUE (role_id, permission_code)
+);
+
+-- ============================================
+-- TABLE: audit_logs
+-- ============================================
+CREATE TABLE audit_logs (
+    log_id UUID PRIMARY KEY,
+    account_id UUID,
+    action VARCHAR(100),
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(45),
+
+    CONSTRAINT fk_audit_logs_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(account_id)
+);
 ```
 
 ### 1.4. API (REST)
