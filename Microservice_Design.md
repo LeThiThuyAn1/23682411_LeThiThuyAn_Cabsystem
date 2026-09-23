@@ -1,9 +1,5 @@
 # C2. THIẾT KẾ MICROSERVICES THEO BOUNDED CONTEXT — CAB SYSTEM
 
-> Nguyên tắc: **1 Bounded Context = 1 Microservice = 1 Database riêng** (Database per Service).
-> Quy trình thiết kế mỗi service: (1) FR/Workflow liên quan → (2) Ubiquitous Language → (3) Mô hình thực thể (Entity Model) → (4) API → (5) Chọn loại CSDL (DB Type) → (6) Thiết kế schema CSDL.
-
----
 
 ## 0. Bảng tổng quan Microservice ↔ Database
 
