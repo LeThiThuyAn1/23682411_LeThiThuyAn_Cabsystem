@@ -87,6 +87,8 @@ erDiagram
 
 ### 1.6. Database Schema (PostgreSQL)
 
+### 1.6. Database Schema (PostgreSQL)
+
 ```sql
 CREATE TABLE roles (
     role_id UUID PRIMARY KEY,
