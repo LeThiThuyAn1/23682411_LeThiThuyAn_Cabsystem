@@ -1,4 +1,9 @@
-# THIẾT KẾ MICROSERVICES THEO BOUNDED CONTEXT — CAB SYSTEM
+# C2. THIẾT KẾ MICROSERVICES THEO BOUNDED CONTEXT — CAB SYSTEM
+
+> Nguyên tắc: **1 Bounded Context = 1 Microservice = 1 Database riêng** (Database per Service).
+> Quy trình thiết kế mỗi service: (1) FR/Workflow liên quan → (2) Ubiquitous Language → (3) Mô hình thực thể (Entity Model) → (4) API → (5) Chọn loại CSDL (DB Type) → (6) Thiết kế schema CSDL.
+
+---
 
 ## 0. Bảng tổng quan Microservice ↔ Database
 
@@ -84,8 +89,6 @@ erDiagram
 - Quan hệ Account–Role–Permission là quan hệ chặt (1-N, N-N), cần **JOIN** và ràng buộc khoá ngoại.
 - Bảo mật/ACID bắt buộc: không được mất/nhân đôi dữ liệu đăng nhập.
 - Khối lượng dữ liệu không quá lớn, không cần scale ngang mạnh như Booking.
-
-### 1.6. Database Schema (PostgreSQL)
 
 ### 1.6. Database Schema (PostgreSQL)
 
