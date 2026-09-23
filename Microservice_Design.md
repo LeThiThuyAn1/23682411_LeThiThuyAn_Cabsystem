@@ -35,7 +35,7 @@
 
 ### 1.3. Mô hình thực thể
 
-```mermaid
+```sql
 CREATE TABLE roles (
     role_id UUID PRIMARY KEY,
     role_name VARCHAR(30) UNIQUE NOT NULL
